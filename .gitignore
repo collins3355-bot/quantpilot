@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# large local artifacts — never commit model weights or generated runs
+models/
+data/
+work/
+reports/
+*.gguf
