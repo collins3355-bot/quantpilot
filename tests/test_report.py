@@ -39,6 +39,18 @@ class TestReport(unittest.TestCase):
         self.assertEqual(len(payload["variants"]), 2)
         self.assertAlmostEqual(payload["variants"][1]["ppl_increase_pct"], 0.5)
 
+    def test_kld_columns_appear_when_measured(self):
+        run = make_run()
+        run.baseline.mean_kld, run.baseline.same_top_pct = 0.0, 100.0
+        run.variants[0].mean_kld, run.variants[0].same_top_pct = 0.0281, 91.9
+        md = render_markdown(run, HARDWARE)
+        self.assertIn("Mean KLD", md)
+        self.assertIn("| 0.0281 | 91.9% |", md)
+
+    def test_kld_columns_absent_when_skipped(self):
+        md = render_markdown(make_run(), HARDWARE)
+        self.assertNotIn("Mean KLD", md)
+
 
 if __name__ == "__main__":
     unittest.main()

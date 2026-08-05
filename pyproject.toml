@@ -11,6 +11,9 @@ requires-python = ">=3.10"
 license = "AGPL-3.0-or-later"
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/collins3355-bot/quantpilot"
+
 [project.scripts]
 quantpilot = "quantpilot.cli:main"
 

@@ -24,6 +24,32 @@ class TestPerplexityParsing(unittest.TestCase):
             llamacpp.parse_perplexity("model failed to load")
 
 
+class TestKLDParsing(unittest.TestCase):
+    SAMPLE = (
+        "====== KL divergence statistics ======\n"
+        "Mean    KLD:   0.028143 ±   0.001151\n"
+        "Maximum KLD:   0.401573\n"
+        "====== Token probability statistics ======\n"
+        "Mean    Δp: -0.572 ± 0.124 %\n"
+        "RMS Δp    :  3.993 ± 0.197 %\n"
+        "Same top p: 91.961 ±  0.852 %\n"
+    )
+
+    def test_parses_mean_kld_and_top1(self):
+        stats = llamacpp.parse_kld(self.SAMPLE)
+        self.assertAlmostEqual(stats.mean_kld, 0.028143)
+        self.assertAlmostEqual(stats.same_top_pct, 91.961)
+
+    def test_top1_is_optional(self):
+        stats = llamacpp.parse_kld("Mean    KLD:   0.005\n")
+        self.assertAlmostEqual(stats.mean_kld, 0.005)
+        self.assertIsNone(stats.same_top_pct)
+
+    def test_raises_when_missing(self):
+        with self.assertRaises(llamacpp.EngineError):
+            llamacpp.parse_kld("no statistics here")
+
+
 class TestBenchParsing(unittest.TestCase):
     def test_extracts_prompt_and_generate_speeds(self):
         output = (

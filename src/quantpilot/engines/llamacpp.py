@@ -90,6 +90,61 @@ def perplexity(model: Path, corpus: Path, chunks: int) -> tuple[float, float | N
     return parse_perplexity(output)
 
 
+def save_base_logits(model: Path, corpus: Path, chunks: int, dest: Path) -> tuple[float, float | None]:
+    """Run the baseline over the corpus, saving its full logits to `dest`.
+
+    Returns the baseline perplexity (the run reports it in the same pass).
+    Note: the logits file is large — roughly tokens x vocab x 2 bytes,
+    i.e. several GB for 32 chunks on a modern vocabulary.
+    """
+    output = _run(
+        [
+            find_binary("llama-perplexity"),
+            "-m", model,
+            "-f", corpus,
+            "--chunks", str(chunks),
+            "-ngl", "99",
+            "--kl-divergence-base", dest,
+        ]
+    )
+    return parse_perplexity(output)
+
+
+@dataclass
+class KLDStats:
+    mean_kld: float  # mean KL divergence vs. baseline logits (0 = identical)
+    same_top_pct: float | None  # % of tokens where the top-1 prediction matches
+
+
+_KLD_RE = re.compile(r"Mean\s+KLD:\s+([0-9.eE+-]+)")
+_TOP_RE = re.compile(r"Same top p:\s*([0-9.]+)")
+
+
+def parse_kld(output: str) -> KLDStats:
+    kld_match = _KLD_RE.search(output)
+    if not kld_match:
+        raise EngineError("could not find 'Mean KLD:' in llama-perplexity output")
+    top_match = _TOP_RE.search(output)
+    return KLDStats(
+        mean_kld=float(kld_match.group(1)),
+        same_top_pct=float(top_match.group(1)) if top_match else None,
+    )
+
+
+def kl_divergence(model: Path, base_logits: Path) -> KLDStats:
+    """Compare a quantized model's token distributions against saved baseline logits."""
+    output = _run(
+        [
+            find_binary("llama-perplexity"),
+            "-m", model,
+            "--kl-divergence-base", base_logits,
+            "--kl-divergence",
+            "-ngl", "99",
+        ]
+    )
+    return parse_kld(output)
+
+
 @dataclass
 class Speed:
     prompt_tps: float | None  # prompt processing, tokens/second
