@@ -200,6 +200,13 @@ def cmd_compare(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Long runs are often piped/backgrounded; line-buffer stdout so progress
+    # lines appear as they happen instead of all at once on exit.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
+
     parser = argparse.ArgumentParser(
         prog="quantpilot",
         description="Quantization autotuner: find the best quant for your model, "
