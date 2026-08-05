@@ -13,3 +13,6 @@ data/
 work/
 reports/
 *.gguf
+
+# local Claude Code config
+.claude/
