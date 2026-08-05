@@ -16,3 +16,6 @@ reports/
 
 # local Claude Code config
 .claude/
+
+# demo build artifacts
+demo/

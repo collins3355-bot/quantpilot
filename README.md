@@ -10,7 +10,7 @@ quantpilot replaces the folklore with a measurement.
 
 Real output from an M1 Max, Qwen3-8B: [GGUF sweep](examples/qwen3-8b-gguf.md) ·
 [MLX sweep](examples/qwen3-8b-mlx.md) ·
-[GGUF vs. MLX head-to-head](examples/qwen3-8b-gguf-vs-mlx.md) — the two
+[GGUF vs. MLX head-to-head](examples/qwen3-8b-gguf-vs-mlx.md) · [per-layer search](examples/qwen3-8b-search.md) — the two
 engines' full-precision baselines agree to 0.04%, and the quality frontier is
 genuinely mixed (MLX wins at 6-bit, GGUF's K-quants win at 4-bit).
 
