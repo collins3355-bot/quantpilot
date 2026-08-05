@@ -49,7 +49,8 @@ quantpilot bench \
   --corpus path/to/wiki.test.raw \     # plain text used to measure quality
   --quants Q4_K_M Q5_K_M Q8_0 \        # candidates to try
   --budget 1.0 \                       # max % perplexity increase you'll accept
-  --chunks 32                          # how much of the corpus to evaluate
+  --chunks 32 \                        # how much of the corpus to evaluate
+  --hellaswag data/hellaswag_val_full.txt   # optional: also score a task eval
 ```
 
 Reports land in `reports/` as markdown (for humans) and JSON (for machines).
@@ -63,6 +64,10 @@ quantpilot bench-mlx \
   --corpus path/to/wiki.test.raw \
   --quants 4 6 8                       # MLX bit-widths
 ```
+
+By default `bench-mlx` also measures KL divergence: a second pass per quant
+loads the 16-bit baseline alongside it (budget memory for both, and roughly
+double the per-variant eval time). Skip it with `--no-kld`.
 
 Compose a per-layer mixed-precision recipe instead of picking a preset — it
 probes each tensor class's sensitivity on your model, then bumps the most
@@ -95,7 +100,14 @@ Or run without installing: `PYTHONPATH=src python3 -m quantpilot bench ...`
   a good perplexity while disagreeing with the baseline token-by-token. Also
   reported: top-1 agreement (% of positions where the quant picks the same
   token). Skip with `--no-kld` (the baseline logits file runs several GB).
+- **HellaSwag accuracy** (optional, `--hellaswag`): a real task eval, because
+  wikitext perplexity is a narrow lens. Uses llama.cpp's native scorer with
+  the community-standard `hellaswag_val_full.txt` data file.
 - **Speed** from `llama-bench`: prompt processing and generation tokens/second.
+
+Both engines report KL divergence — the MLX side computes it in-process
+against the 16-bit baseline in a separate pass (no multi-GB logits file, but
+the baseline rides along in memory during that pass; `--no-kld` skips it).
 
 Comparing across engines: both backends score only tokens with ≥ 256 tokens of
 context (llama-perplexity's convention), so for the *same model* in GGUF and
@@ -106,8 +118,8 @@ against its own engine's full-precision baseline instead.
 ## Roadmap
 
 The detailed public roadmap lives in [ROADMAP.md](ROADMAP.md). Short version:
-- **Task evals** (small MMLU/GSM8K slices) alongside perplexity
 - **Hardware-aware search**: given "must fit in N GB", search the frontier for you
+- **Calibration-aware compilation**: imatrix, IQ-quants, MLX quant predicates
 
 ## License
 

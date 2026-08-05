@@ -5,15 +5,15 @@ Hardware: Apple M1 Max, 64 GB unified memory, Darwin 25.4.0
 
 | Engine | Variant | Size | Δ size | Perplexity | Δ PPL | Gen t/s |
 |---|---|---|---|---|---|---|
-| MLX | 16-bit (baseline) | 15.27 GB | +0% | 8.7761 | +0.00% | 20 |
-| GGUF | baseline | 15.26 GB | +0% | 8.7725 | +0.00% | 20 |
-| MLX | 8-bit | 8.12 GB | -47% | 8.7789 | +0.03% | 31 |
-| GGUF | Q8_0 | 8.11 GB | -47% | 8.7991 | +0.30% | 37 |
-| GGUF | Q6_K | 6.26 GB | -59% | 8.8453 | +0.83% | 44 |
-| MLX | 6-bit | 6.21 GB | -59% | 8.8238 | +0.54% | 40 |
-| GGUF | Q5_K_M | 5.45 GB | -64% | 8.8792 | +1.22% | 36 |
-| GGUF | Q4_K_M | 4.68 GB | -69% | 8.9857 | +2.43% | 46 |
-| MLX | 4-bit | 4.30 GB | -72% | 9.2295 | +5.17% | 56 |
+| MLX | 16-bit (baseline) | 15.27 GB | +0% | 8.7782 | +0.00% | 18 |
+| GGUF | baseline | 15.26 GB | +0% | 8.7725 | +0.00% | 22 |
+| MLX | 8-bit | 8.12 GB | -47% | 8.7809 | +0.03% | 32 |
+| GGUF | Q8_0 | 8.11 GB | -47% | 8.7991 | +0.30% | 30 |
+| GGUF | Q6_K | 6.26 GB | -59% | 8.8453 | +0.83% | 29 |
+| MLX | 6-bit | 6.21 GB | -59% | 8.8248 | +0.53% | 34 |
+| GGUF | Q5_K_M | 5.45 GB | -64% | 8.8792 | +1.22% | 29 |
+| GGUF | Q4_K_M | 4.68 GB | -69% | 8.9857 | +2.43% | 43 |
+| MLX | 4-bit | 4.30 GB | -72% | 9.2293 | +5.14% | 53 |
 | GGUF | Q3_K_M | 3.84 GB | -75% | 9.5153 | +8.47% | 42 |
 
 ## Budget frontier
@@ -21,7 +21,7 @@ Hardware: Apple M1 Max, 64 GB unified memory, Darwin 25.4.0
 Smallest artifact within each quality budget, across all engines:
 
 - ≤ +0.5% PPL: **GGUF Q8_0** — 8.11 GB at +0.30% PPL
-- ≤ +1% PPL: **MLX 6-bit** — 6.21 GB at +0.54% PPL
+- ≤ +1% PPL: **MLX 6-bit** — 6.21 GB at +0.53% PPL
 - ≤ +2% PPL: **GGUF Q5_K_M** — 5.45 GB at +1.22% PPL
 - ≤ +5% PPL: **GGUF Q4_K_M** — 4.68 GB at +2.43% PPL
 

@@ -87,12 +87,26 @@ def parse_runner_output(output: str) -> dict:
     raise EngineError("could not find the JSON result line in mlx runner output")
 
 
-def measure(model_dir: Path, corpus: Path, chunks: int) -> dict:
-    """Perplexity + speed for an MLX model directory. Keys: ppl, prompt_tps, generate_tps."""
-    output = _run(
-        [find_python(), RUNNER, "--model", model_dir, "--corpus", corpus, "--chunks", str(chunks)]
-    )
-    return parse_runner_output(output)
+def measure(
+    model_dir: Path,
+    corpus: Path,
+    chunks: int,
+    kld_vs: Path | None = None,
+    gen_tokens: int | None = None,
+) -> dict:
+    """Perplexity + speed for an MLX model directory.
+
+    Keys: ppl, prompt_tps, generate_tps; with `kld_vs` (a baseline model dir),
+    also mean_kld and same_top_pct measured against that baseline in-process.
+    Speed numbers are only trustworthy from a solo run (no `kld_vs`) — with a
+    baseline co-resident, memory pressure can distort them on small machines.
+    """
+    cmd = [find_python(), RUNNER, "--model", model_dir, "--corpus", corpus, "--chunks", str(chunks)]
+    if kld_vs is not None:
+        cmd += ["--kld-vs", kld_vs]
+    if gen_tokens is not None:
+        cmd += ["--gen-tokens", str(gen_tokens)]
+    return parse_runner_output(_run(cmd))
 
 
 def dir_size(path: Path) -> int:

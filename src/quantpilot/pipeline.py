@@ -22,6 +22,7 @@ class Variant:
     generate_tps: float | None
     mean_kld: float | None = None  # mean KL divergence vs. baseline (0 = identical)
     same_top_pct: float | None = None  # % of tokens with the same top-1 prediction
+    hellaswag_acc: float | None = None  # HellaSwag accuracy % (task eval)
 
     def ppl_increase_pct(self, baseline_ppl: float) -> float:
         return (self.ppl - baseline_ppl) / baseline_ppl * 100.0
@@ -62,6 +63,8 @@ def _measure(
     progress: Progress,
     base_logits: Path | None = None,
     save_logits_to: Path | None = None,
+    hellaswag_data: Path | None = None,
+    hellaswag_tasks: int = 400,
 ) -> Variant:
     if save_logits_to is not None:
         progress(f"  measuring perplexity of {name} and saving baseline logits...")
@@ -74,6 +77,10 @@ def _measure(
         progress(f"  measuring KL divergence of {name} vs. baseline...")
         stats = llamacpp.kl_divergence(path, base_logits)
         mean_kld, same_top_pct = stats.mean_kld, stats.same_top_pct
+    hellaswag_acc = None
+    if hellaswag_data is not None:
+        progress(f"  scoring HellaSwag ({hellaswag_tasks} tasks) for {name}...")
+        hellaswag_acc, _ = llamacpp.hellaswag(path, hellaswag_data, hellaswag_tasks)
     progress(f"  benchmarking speed of {name}...")
     speed = llamacpp.bench(path)
     return Variant(
@@ -86,6 +93,7 @@ def _measure(
         generate_tps=speed.generate_tps,
         mean_kld=mean_kld,
         same_top_pct=same_top_pct,
+        hellaswag_acc=hellaswag_acc,
     )
 
 
@@ -97,6 +105,8 @@ def run(
     workdir: Path,
     budget_pct: float,
     kld: bool = True,
+    hellaswag_data: Path | None = None,
+    hellaswag_tasks: int = 400,
     progress: Progress = print,
 ) -> BenchRun:
     workdir.mkdir(parents=True, exist_ok=True)
@@ -105,11 +115,14 @@ def run(
     # chunk count so a changed eval setup never reuses stale logits.
     logits = workdir / f"{source.stem}.{corpus.stem}.{chunks}.kld" if kld else None
 
+    hs = {"hellaswag_data": hellaswag_data, "hellaswag_tasks": hellaswag_tasks}
     progress(f"[1/{len(quants) + 1}] baseline: {source.name}")
     if logits is not None and not logits.exists():
-        baseline = _measure("baseline", source, corpus, chunks, progress, save_logits_to=logits)
+        baseline = _measure(
+            "baseline", source, corpus, chunks, progress, save_logits_to=logits, **hs
+        )
     else:
-        baseline = _measure("baseline", source, corpus, chunks, progress)
+        baseline = _measure("baseline", source, corpus, chunks, progress, **hs)
     if kld:
         baseline.mean_kld, baseline.same_top_pct = 0.0, 100.0
 
@@ -122,7 +135,9 @@ def run(
         else:
             progress(f"  quantizing to {qtype}...")
             llamacpp.quantize(source, dest, qtype)
-        variants.append(_measure(qtype, dest, corpus, chunks, progress, base_logits=logits))
+        variants.append(
+            _measure(qtype, dest, corpus, chunks, progress, base_logits=logits, **hs)
+        )
 
     return BenchRun(
         source=source,

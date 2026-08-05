@@ -24,6 +24,24 @@ class TestPerplexityParsing(unittest.TestCase):
             llamacpp.parse_perplexity("model failed to load")
 
 
+class TestHellaSwagParsing(unittest.TestCase):
+    SAMPLE = (
+        "hellaswag: loading tasks\n"
+        "14\t42.85714286%\t[21.3808%, 67.4094%]\n"
+        "15\t46.66666667%\t[24.8095%, 69.8830%]\n"
+        "16\t50.00000000%\t[27.9996%, 72.0004%]\n"
+    )
+
+    def test_takes_final_running_accuracy(self):
+        acc, tasks = llamacpp.parse_hellaswag(self.SAMPLE)
+        self.assertAlmostEqual(acc, 50.0)
+        self.assertEqual(tasks, 16)
+
+    def test_raises_when_missing(self):
+        with self.assertRaises(llamacpp.EngineError):
+            llamacpp.parse_hellaswag("model failed to load")
+
+
 class TestKLDParsing(unittest.TestCase):
     SAMPLE = (
         "====== KL divergence statistics ======\n"

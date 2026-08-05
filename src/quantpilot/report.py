@@ -25,7 +25,7 @@ def _tps(value: float | None) -> str:
     return f"{value:,.0f}" if value is not None else "—"
 
 
-def _row(v: Variant, baseline: Variant, kld: bool) -> str:
+def _row(v: Variant, baseline: Variant, kld: bool, hs: bool) -> str:
     delta_ppl = v.ppl_increase_pct(baseline.ppl)
     delta_size = (v.size_bytes / baseline.size_bytes - 1) * 100
     cells = [
@@ -38,6 +38,8 @@ def _row(v: Variant, baseline: Variant, kld: bool) -> str:
     if kld:
         cells.append(f"{v.mean_kld:.4f}" if v.mean_kld is not None else "—")
         cells.append(f"{v.same_top_pct:.1f}%" if v.same_top_pct is not None else "—")
+    if hs:
+        cells.append(f"{v.hellaswag_acc:.1f}%" if v.hellaswag_acc is not None else "—")
     cells += [_tps(v.prompt_tps), _tps(v.generate_tps)]
     return "| " + " | ".join(cells) + " |"
 
@@ -48,12 +50,17 @@ def render_markdown(run: BenchRun, hardware: dict) -> str:
     if hardware.get("memory_gb"):
         hw_bits.insert(1, f"{hardware['memory_gb']} GB unified memory")
     kld = run.baseline.mean_kld is not None
+    hs = any(v.hellaswag_acc is not None for v in run.all_variants())
     metric = f"perplexity over {run.chunks} × 512-token chunks of `{run.corpus.name}`"
     if kld:
         metric += ", plus KL divergence of each quant's token distributions vs. baseline"
+    if hs:
+        metric += ", plus HellaSwag accuracy (task eval)"
     header = ["Variant", "Size", "Δ size", "Perplexity", "Δ PPL"]
     if kld:
         header += ["Mean KLD", "Top-1 agree"]
+    if hs:
+        header += ["HellaSwag"]
     header += ["Prompt t/s", "Gen t/s"]
     lines = [
         f"# quantpilot report: {run.source.name}",
@@ -66,7 +73,7 @@ def render_markdown(run: BenchRun, hardware: dict) -> str:
         "| " + " | ".join(header) + " |",
         "|" + "---|" * len(header),
     ]
-    lines += [_row(v, run.baseline, kld) for v in run.all_variants()]
+    lines += [_row(v, run.baseline, kld, hs) for v in run.all_variants()]
     saved = (1 - rec.size_bytes / run.baseline.size_bytes) * 100
     lines += [
         "",
@@ -225,6 +232,7 @@ def to_json(run: BenchRun, hardware: dict) -> str:
                 "ppl_increase_pct": v.ppl_increase_pct(run.baseline.ppl),
                 "mean_kld": v.mean_kld,
                 "same_top_pct": v.same_top_pct,
+                "hellaswag_acc": v.hellaswag_acc,
                 "prompt_tps": v.prompt_tps,
                 "generate_tps": v.generate_tps,
             }

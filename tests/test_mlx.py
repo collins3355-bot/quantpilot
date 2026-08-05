@@ -22,6 +22,12 @@ class TestRunnerOutputParsing(unittest.TestCase):
         with self.assertRaises(llamacpp.EngineError):
             mlxlm.parse_runner_output("no result here")
 
+    def test_kld_keys_pass_through(self):
+        output = '{"ppl": 8.8, "chunks": 32, "mean_kld": 0.015, "same_top_pct": 95.2}\n'
+        result = mlxlm.parse_runner_output(output)
+        self.assertAlmostEqual(result["mean_kld"], 0.015)
+        self.assertAlmostEqual(result["same_top_pct"], 95.2)
+
 
 if __name__ == "__main__":
     unittest.main()

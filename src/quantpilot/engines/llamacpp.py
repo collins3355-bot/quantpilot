@@ -115,6 +115,37 @@ def perplexity(model: Path, corpus: Path, chunks: int) -> tuple[float, float | N
     return parse_perplexity(output)
 
 
+_HS_RE = re.compile(r"^\s*(\d+)\t([0-9.]+)%", re.MULTILINE)
+
+
+def parse_hellaswag(output: str) -> tuple[float, int]:
+    """Return (accuracy_pct, tasks_scored) from --hellaswag output.
+
+    The run prints one line per task with the running accuracy; the last
+    line is the final score.
+    """
+    matches = _HS_RE.findall(output)
+    if not matches:
+        raise EngineError("could not find HellaSwag accuracy lines in output")
+    tasks, acc = matches[-1]
+    return float(acc), int(tasks)
+
+
+def hellaswag(model: Path, data: Path, tasks: int) -> tuple[float, int]:
+    """HellaSwag accuracy (higher = better) over the first `tasks` tasks."""
+    output = _run(
+        [
+            find_binary("llama-perplexity"),
+            "-m", model,
+            "--hellaswag",
+            "-f", data,
+            "--hellaswag-tasks", str(tasks),
+            "-ngl", "99",
+        ]
+    )
+    return parse_hellaswag(output)
+
+
 def save_base_logits(model: Path, corpus: Path, chunks: int, dest: Path) -> tuple[float, float | None]:
     """Run the baseline over the corpus, saving its full logits to `dest`.
 

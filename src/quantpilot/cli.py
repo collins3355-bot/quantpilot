@@ -51,6 +51,8 @@ def cmd_bench(args: argparse.Namespace) -> int:
         workdir=Path(args.workdir),
         budget_pct=args.budget,
         kld=not args.no_kld,
+        hellaswag_data=Path(args.hellaswag) if args.hellaswag else None,
+        hellaswag_tasks=args.hellaswag_tasks,
     )
 
     hardware = hw.describe()
@@ -66,9 +68,18 @@ def cmd_bench(args: argparse.Namespace) -> int:
     return 0
 
 
-def _mlx_variant(name: str, model_dir: Path, corpus: Path, chunks: int) -> Variant:
+def _mlx_variant(
+    name: str, model_dir: Path, corpus: Path, chunks: int, kld_vs: Path | None = None
+) -> Variant:
+    # Speed and quality come from a solo pass; KLD runs as a second pass so
+    # the co-resident baseline can't distort the timings (or the memory
+    # footprint of the timed run).
     print(f"  measuring {name}...")
     result = mlxlm.measure(model_dir, corpus, chunks)
+    kld_result: dict = {}
+    if kld_vs is not None:
+        print(f"  measuring KL divergence of {name} vs. baseline...")
+        kld_result = mlxlm.measure(model_dir, corpus, chunks, kld_vs=kld_vs, gen_tokens=0)
     return Variant(
         name=name,
         path=model_dir,
@@ -77,6 +88,8 @@ def _mlx_variant(name: str, model_dir: Path, corpus: Path, chunks: int) -> Varia
         ppl_err=None,
         prompt_tps=result.get("prompt_tps"),
         generate_tps=result.get("generate_tps"),
+        mean_kld=kld_result.get("mean_kld"),
+        same_top_pct=kld_result.get("same_top_pct"),
     )
 
 
@@ -106,12 +119,15 @@ def cmd_bench_mlx(args: argparse.Namespace) -> int:
     print(f"[1/{steps}] baseline: {name} 16-bit")
     baseline_dir = ensure_converted(workdir / f"{name}-fp16", None, "16-bit")
     baseline = _mlx_variant("16-bit (baseline)", baseline_dir, corpus, args.chunks)
+    kld_vs = None if args.no_kld else baseline_dir
+    if kld_vs is not None:
+        baseline.mean_kld, baseline.same_top_pct = 0.0, 100.0
 
     variants = []
     for i, bits in enumerate(args.quants, start=2):
         print(f"[{i}/{steps}] quant: {bits}-bit")
         dest = ensure_converted(workdir / f"{name}-{bits}bit", bits, f"{bits}-bit")
-        variants.append(_mlx_variant(f"{bits}-bit", dest, corpus, args.chunks))
+        variants.append(_mlx_variant(f"{bits}-bit", dest, corpus, args.chunks, kld_vs=kld_vs))
 
     bench = BenchRun(
         source=Path(args.model),
@@ -237,6 +253,14 @@ def main(argv: list[str] | None = None) -> int:
         "--no-kld", action="store_true",
         help="skip KL-divergence measurement (saves time and a multi-GB logits file)",
     )
+    bench.add_argument(
+        "--hellaswag", default=None, metavar="DATA",
+        help="path to hellaswag_val_full.txt to also score HellaSwag accuracy",
+    )
+    bench.add_argument(
+        "--hellaswag-tasks", type=int, default=400,
+        help="number of HellaSwag tasks to score (default: 400)",
+    )
     bench.add_argument("--workdir", default="work", help="where quantized files go")
     bench.add_argument("--out", default="reports", help="where reports go")
     bench.set_defaults(func=cmd_bench)
@@ -255,6 +279,10 @@ def main(argv: list[str] | None = None) -> int:
                      help="512-token chunks of the corpus to evaluate (default: 32)")
     mlx.add_argument("--budget", type=float, default=1.0,
                      help="max acceptable perplexity increase in percent (default: 1.0)")
+    mlx.add_argument(
+        "--no-kld", action="store_true",
+        help="skip KL-divergence measurement (avoids loading the baseline alongside each quant)",
+    )
     mlx.add_argument("--workdir", default="work/mlx", help="where converted models go")
     mlx.add_argument("--out", default="reports", help="where reports go")
     mlx.set_defaults(func=cmd_bench_mlx)

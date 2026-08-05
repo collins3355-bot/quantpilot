@@ -51,6 +51,17 @@ class TestReport(unittest.TestCase):
         md = render_markdown(make_run(), HARDWARE)
         self.assertNotIn("Mean KLD", md)
 
+    def test_hellaswag_column_appears_when_measured(self):
+        run = make_run()
+        run.baseline.hellaswag_acc = 71.5
+        run.variants[0].hellaswag_acc = 70.2
+        md = render_markdown(run, HARDWARE)
+        self.assertIn("HellaSwag", md)
+        self.assertIn("| 70.2% |", md)
+
+    def test_hellaswag_column_absent_when_skipped(self):
+        self.assertNotIn("HellaSwag", render_markdown(make_run(), HARDWARE))
+
 
 if __name__ == "__main__":
     unittest.main()

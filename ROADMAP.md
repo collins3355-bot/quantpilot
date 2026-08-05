@@ -11,15 +11,17 @@ them.
   greedily compose a recipe that hits your quality budget.
 - Every search report ends with a reproducible `llama-quantize` command.
 
-## v0.4 — trust the numbers everywhere
+## v0.4 — trust the numbers everywhere (shipped)
 
-- **Task evals** (small MMLU / GSM8K / HellaSwag slices) alongside perplexity,
-  because wikitext PPL is a narrow lens.
-- **KL divergence for the MLX backend** (already first-class on GGUF).
-- Multiple corpora (code, chat, multilingual) with per-corpus deltas.
-- Error bars surfaced everywhere a number is shown.
+- **HellaSwag task eval** alongside perplexity (`bench --hellaswag`), because
+  wikitext PPL is a narrow lens. More tasks (MMLU/GSM8K slices) to follow.
+- **KL divergence for the MLX backend**, computed in-process against the
+  16-bit baseline — metric parity with GGUF.
 
 ## v0.5 — hardware-aware targets
+
+- Multiple corpora (code, chat, multilingual) with per-corpus deltas.
+- Error bars surfaced everywhere a number is shown.
 
 - `--fit 12GB`: search for the best model *that actually fits*, counting KV
   cache at your target context length, not just file size.

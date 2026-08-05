@@ -2,19 +2,19 @@
 
 Hardware: Apple M1 Max, 64 GB unified memory, Darwin 25.4.0
 Engine: mlx-lm (group quantization), venv .venv-mlx/bin/python
-Quality metric: perplexity over 32 × 512-token chunks of `wiki.test.raw`
+Quality metric: perplexity over 32 × 512-token chunks of `wiki.test.raw`, plus KL divergence of each quant's token distributions vs. baseline
 Quality budget: ≤ 1% perplexity increase vs. baseline
 
-| Variant | Size | Δ size | Perplexity | Δ PPL | Prompt t/s | Gen t/s |
-|---|---|---|---|---|---|---|
-| 16-bit (baseline) | 15.27 GB | +0% | 8.7761 | +0.00% | 459 | 20 |
-| 4-bit | 4.30 GB | -72% | 9.2295 | +5.17% | 294 | 56 |
-| 6-bit | 6.21 GB | -59% | 8.8238 | +0.54% | 283 | 40 |
-| 8-bit | 8.12 GB | -47% | 8.7789 | +0.03% | 279 | 31 |
+| Variant | Size | Δ size | Perplexity | Δ PPL | Mean KLD | Top-1 agree | Prompt t/s | Gen t/s |
+|---|---|---|---|---|---|---|---|---|
+| 16-bit (baseline) | 15.27 GB | +0% | 8.7782 | +0.00% | 0.0000 | 100.0% | 444 | 18 |
+| 4-bit | 4.30 GB | -72% | 9.2293 | +5.14% | 0.1074 | 86.6% | 274 | 53 |
+| 6-bit | 6.21 GB | -59% | 8.8248 | +0.53% | 0.0088 | 95.6% | 237 | 34 |
+| 8-bit | 8.12 GB | -47% | 8.7809 | +0.03% | 0.0018 | 98.0% | 252 | 32 |
 
 ## Recommendation
 
-**6-bit** — 6.21 GB (59% smaller than baseline) at +0.54% perplexity, inside the 1% budget.
+**6-bit** — 6.21 GB (59% smaller than baseline) at +0.53% perplexity, inside the 1% budget.
 
 Artifact: `work/mlx/Qwen3-8B-6bit`
 
