@@ -52,9 +52,34 @@ def _run(cmd: list, timeout: int = 3600) -> str:
     return output
 
 
-def quantize(source: Path, dest: Path, qtype: str) -> Path:
-    """Produce a quantized copy of `source` using a llama.cpp type such as Q4_K_M."""
-    _run([find_binary("llama-quantize"), source, dest, qtype])
+def override_args(tensor_overrides: dict[str, str] | None) -> list[str]:
+    """Translate {tensor_class: ggml_type} into llama-quantize CLI flags.
+
+    token_embd and output have dedicated flags; everything else uses the
+    repeatable --tensor-type name=type form.
+    """
+    args: list[str] = []
+    for cls, qtype in (tensor_overrides or {}).items():
+        qtype = qtype.lower()
+        if cls == "token_embd":
+            args += ["--token-embedding-type", qtype]
+        elif cls == "output":
+            args += ["--output-tensor-type", qtype]
+        else:
+            args += ["--tensor-type", f"{cls}={qtype}"]
+    return args
+
+
+def quantize(
+    source: Path, dest: Path, qtype: str, tensor_overrides: dict[str, str] | None = None
+) -> Path:
+    """Produce a quantized copy of `source` using a llama.cpp type such as Q4_K_M.
+
+    `tensor_overrides` selectively bumps tensor classes to a different type,
+    e.g. {"ffn_down": "q6_k"} — the mechanism behind mixed-precision recipes.
+    """
+    cmd = [find_binary("llama-quantize"), *override_args(tensor_overrides), source, dest, qtype]
+    _run(cmd)
     if not dest.exists():
         raise EngineError(f"llama-quantize reported success but {dest} does not exist")
     return dest

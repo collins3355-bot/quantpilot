@@ -64,6 +64,18 @@ quantpilot bench-mlx \
   --quants 4 6 8                       # MLX bit-widths
 ```
 
+Compose a per-layer mixed-precision recipe instead of picking a preset — it
+probes each tensor class's sensitivity on your model, then bumps the most
+valuable classes until the composed model meets your quality budget, and
+prints the exact `llama-quantize` command to reproduce the recipe:
+
+```
+quantpilot search \
+  --source path/to/model-bf16.gguf \
+  --corpus path/to/wiki.test.raw \
+  --base Q4_K_M --bump Q6_K --budget 1.0
+```
+
 Merge runs of the *same model* on different engines into one table with a
 quality-budget frontier (smallest artifact within each budget, across engines):
 
@@ -92,7 +104,8 @@ models (different tokenizers), compare each quant's relative degradation
 against its own engine's full-precision baseline instead.
 
 ## Roadmap
-- **Per-layer mixed precision search** — not just picking a preset, composing one
+
+The detailed public roadmap lives in [ROADMAP.md](ROADMAP.md). Short version:
 - **Task evals** (small MMLU/GSM8K slices) alongside perplexity
 - **Hardware-aware search**: given "must fit in N GB", search the frontier for you
 

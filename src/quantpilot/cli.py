@@ -136,6 +136,48 @@ def cmd_bench_mlx(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_search(args: argparse.Namespace) -> int:
+    import json
+
+    from .report import render_search, search_to_json
+    from .search import run_search
+
+    source = Path(args.source)
+    corpus = Path(args.corpus)
+    for path, flag in ((source, "--source"), (corpus, "--corpus")):
+        if not path.exists():
+            print(f"error: {flag} {path} does not exist", file=sys.stderr)
+            return 1
+
+    result = run_search(
+        source=source,
+        corpus=corpus,
+        chunks=args.chunks,
+        workdir=Path(args.workdir),
+        base=args.base,
+        bump=args.bump,
+        budget_pct=args.budget,
+        classes=args.classes,
+        keep_artifacts=args.keep_artifacts,
+    )
+
+    ladder = None
+    if args.ladder:
+        ladder = json.loads(Path(args.ladder).read_text())
+
+    hardware = hw.describe()
+    outdir = Path(args.out)
+    outdir.mkdir(parents=True, exist_ok=True)
+    md_path = outdir / f"{source.stem}-search.md"
+    md_path.write_text(render_search(result, hardware, ladder))
+    (outdir / f"{source.stem}-search.json").write_text(search_to_json(result, hardware))
+
+    print()
+    print(md_path.read_text())
+    print(f"report written to {md_path}")
+    return 0
+
+
 def cmd_compare(args: argparse.Namespace) -> int:
     from .compare import load_report, render_comparison
 
@@ -209,6 +251,28 @@ def main(argv: list[str] | None = None) -> int:
     mlx.add_argument("--workdir", default="work/mlx", help="where converted models go")
     mlx.add_argument("--out", default="reports", help="where reports go")
     mlx.set_defaults(func=cmd_bench_mlx)
+
+    search = sub.add_parser(
+        "search", help="compose a per-layer mixed-precision recipe to hit a quality budget"
+    )
+    search.add_argument("--source", required=True, help="path to an F16/BF16 .gguf model")
+    search.add_argument("--corpus", required=True, help="plain-text file for perplexity")
+    search.add_argument("--base", default="Q4_K_M", help="base quant type (default: Q4_K_M)")
+    search.add_argument("--bump", default="Q6_K",
+                        help="type sensitive classes get bumped to (default: Q6_K)")
+    search.add_argument("--budget", type=float, default=1.0,
+                        help="max %% PPL increase vs. full-precision baseline (default: 1.0)")
+    search.add_argument("--chunks", type=int, default=32,
+                        help="512-token chunks of the corpus to evaluate (default: 32)")
+    search.add_argument("--classes", nargs="+", default=None,
+                        help="tensor classes to probe (default: all)")
+    search.add_argument("--keep-artifacts", action="store_true",
+                        help="keep probe/intermediate .gguf files instead of deleting them")
+    search.add_argument("--ladder", default=None,
+                        help="bench report .json for uniform-ladder comparison in the report")
+    search.add_argument("--workdir", default="work", help="where quantized files go")
+    search.add_argument("--out", default="reports", help="where reports go")
+    search.set_defaults(func=cmd_search)
 
     compare = sub.add_parser(
         "compare", help="merge bench report JSONs into one cross-engine table"
