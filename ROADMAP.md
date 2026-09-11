@@ -18,15 +18,16 @@ them.
 - **KL divergence for the MLX backend**, computed in-process against the
   16-bit baseline — metric parity with GGUF.
 
-## v0.5 — hardware-aware targets
+## v0.5 — hardware-aware targets (`fit` shipped)
 
-- Multiple corpora (code, chat, multilingual) with per-corpus deltas.
-- Error bars surfaced everywhere a number is shown.
-
-- `--fit 12GB`: search for the best model *that actually fits*, counting KV
-  cache at your target context length, not just file size.
-- Speed-weighted recommendations (quality budget + latency floor).
-- Machine profiles so reports from different hardware are comparable.
+- **Shipped:** `quantpilot fit` — ranks measured artifacts by runtime
+  footprint (weights + KV cache at your target context, from a native
+  pure-Python GGUF metadata reader) against a memory budget. Validated to
+  the MiB against llama.cpp's own KV allocations.
+- Still to come in 0.5.x: speed-weighted recommendations (quality budget +
+  latency floor), machine profiles, multiple corpora with per-corpus deltas,
+  error bars everywhere, fit for MLX reports, and KV math for
+  sliding-window/MLA architectures.
 
 ## v0.6 — calibration-aware compilation
 

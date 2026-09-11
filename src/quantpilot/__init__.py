@@ -5,4 +5,4 @@ it produces the smallest/fastest quantized artifact that stays inside
 that budget, plus a benchmark report showing its work.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

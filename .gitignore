@@ -19,3 +19,5 @@ reports/
 
 # demo build artifacts
 demo/
+laymans-guide.md
+.DS_Store

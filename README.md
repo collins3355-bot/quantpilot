@@ -81,6 +81,18 @@ quantpilot search \
   --base Q4_K_M --bump Q6_K --budget 1.0
 ```
 
+Turn a benchmark into a deployment decision — `fit` reads the model's GGUF
+metadata natively and ranks the measured artifacts by *runtime* footprint
+(weights **plus KV cache at your context length**, validated to the MiB
+against llama.cpp's own allocations) against a memory budget:
+
+```
+quantpilot fit reports/Qwen3-8B-BF16.json --ram 16 --ctx 8192
+```
+
+The answer changes with context: on a 16 GB machine, Qwen3-8B wants Q8_0 at
+8k context but Q6_K at 32k — no static quant chart can tell you that.
+
 Merge runs of the *same model* on different engines into one table with a
 quality-budget frontier (smallest artifact within each budget, across engines):
 

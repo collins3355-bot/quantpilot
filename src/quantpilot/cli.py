@@ -18,6 +18,7 @@ from .report import render_markdown, to_json
 
 DEFAULT_QUANTS = ["Q4_K_M", "Q5_K_M", "Q8_0"]
 DEFAULT_MLX_BITS = [4, 6, 8]
+KV_BYTES_CHOICES = ("f32", "f16", "bf16", "q8_0", "q4_0")
 
 
 def cmd_doctor(_args: argparse.Namespace) -> int:
@@ -194,6 +195,42 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fit(args: argparse.Namespace) -> int:
+    from .fit import FitError, compute_rows, find_shape, load_report, render
+    from .memory import KV_BYTES
+
+    report_path = Path(args.report)
+    if not report_path.exists():
+        print(f"error: {report_path} does not exist", file=sys.stderr)
+        return 1
+    hardware = hw.describe()
+    ram_gb = args.ram if args.ram is not None else hardware.get("memory_gb")
+    if not ram_gb:
+        print("error: could not detect RAM; pass --ram", file=sys.stderr)
+        return 1
+
+    try:
+        report = load_report(report_path)
+        shape = find_shape(report)
+    except FitError as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
+
+    budget_bytes = ram_gb * args.headroom * 1024**3
+    rows = compute_rows(report, shape, args.ctx, args.kv_type, budget_bytes)
+    markdown = render(
+        report, rows, shape, args.ctx, args.kv_type, ram_gb, args.headroom, hardware
+    )
+
+    outdir = Path(args.out)
+    outdir.mkdir(parents=True, exist_ok=True)
+    md_path = outdir / f"{Path(report['source']).stem}-fit-{args.ctx}.md"
+    md_path.write_text(markdown)
+    print(markdown)
+    print(f"report written to {md_path}")
+    return 0
+
+
 def cmd_compare(args: argparse.Namespace) -> int:
     from .compare import load_report, render_comparison
 
@@ -308,6 +345,22 @@ def main(argv: list[str] | None = None) -> int:
     search.add_argument("--workdir", default="work", help="where quantized files go")
     search.add_argument("--out", default="reports", help="where reports go")
     search.set_defaults(func=cmd_search)
+
+    fit = sub.add_parser(
+        "fit", help="rank a bench report's artifacts by what fits your machine at runtime"
+    )
+    fit.add_argument("report", help="bench report .json (GGUF engine)")
+    fit.add_argument("--ram", type=float, default=None,
+                     help="memory budget in GB (default: this machine's RAM)")
+    fit.add_argument("--ctx", type=int, default=8192,
+                     help="target context length in tokens (default: 8192)")
+    fit.add_argument("--kv-type", default="f16", choices=sorted(KV_BYTES_CHOICES),
+                     help="KV cache storage type (default: f16)")
+    fit.add_argument("--headroom", type=float, default=0.75,
+                     help="fraction of RAM usable for the model (default: 0.75, "
+                     "≈ the Metal working-set limit on Apple silicon)")
+    fit.add_argument("--out", default="reports", help="where reports go")
+    fit.set_defaults(func=cmd_fit)
 
     compare = sub.add_parser(
         "compare", help="merge bench report JSONs into one cross-engine table"
