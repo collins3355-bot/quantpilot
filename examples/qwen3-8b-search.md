@@ -2,8 +2,8 @@
 
 Hardware: Apple M1 Max, 64 GB unified memory, Darwin 25.4.0
 Recipe space: base Q4_K_M, bump Q6_K, per tensor class
-Quality metric: perplexity over 32 × 512-token chunks of `wiki.test.raw`
-Quality budget: ≤ 1% PPL increase vs. full-precision baseline (PPL 8.7725)
+Tuning metric: perplexity over 32 × 512-token chunks of `wiki.test.tune.txt`
+Quality budget: ≤ 1% PPL increase vs. full-precision baseline (PPL 8.7725 on the tuning text)
 
 Uniform Q4_K_M: 4.68 GB, PPL 8.9857 (+2.43% vs. baseline)
 
@@ -26,9 +26,23 @@ Uniform Q4_K_M: 4.68 GB, PPL 8.9857 (+2.43% vs. baseline)
 
 ## Result
 
-**Met the 1% budget** at 5.48 GB (+0.68% PPL) with 3 class bump(s): ffn_down, attn_output, ffn_up.
+**Met the 1% budget on the tuning text** at 5.48 GB (+0.68% PPL) with 3 class bump(s): ffn_down, attn_output, ffn_up.
 
-Uniform ladder comparison: the smallest preset inside the budget was **Q6_K** at 6.26 GB (+0.83%). The composed recipe is 803 MB smaller.
+## Held-out check
+
+The search never saw `wiki.test.holdout.txt`, so these numbers show whether the recipe generalizes (baseline PPL 9.4835). Intervals are ~95%, paired chunk by chunk against the baseline.
+
+| Variant | Size | Δ PPL vs. baseline | 95% interval |
+|---|---|---|---|
+| uniform Q4_K_M | 4.68 GB | +2.80% | +1.72% to +3.88% |
+| uniform Q6_K | 6.26 GB | +0.78% | +0.48% to +1.09% |
+| recipe | 5.48 GB | +1.25% | +0.58% to +1.93% |
+
+**Does not hold on held-out text:** +1.25% against the 1% budget. The recipe fit the tuning text better than text in general; prefer uniform Q6_K, or tune on more text (`--chunks`).
+
+Recipe vs. uniform Q6_K: 803 MB smaller, perplexity +0.47% (95% interval -0.23% to +1.17%): no measurable quality difference.
+
+Uniform ladder comparison: the smallest preset inside the budget was **Q6_K** at 6.26 GB (+0.83%). The composed recipe is 803 MB smaller. These bench numbers come from different text; the held-out check above is the fair comparison.
 
 Artifact: `work/Qwen3-8B-BF16-Q4_K_M-mix3.gguf`
 

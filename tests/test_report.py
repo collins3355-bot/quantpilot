@@ -1,4 +1,5 @@
 import json
+import math
 import unittest
 from pathlib import Path
 
@@ -61,6 +62,32 @@ class TestReport(unittest.TestCase):
 
     def test_hellaswag_column_absent_when_skipped(self):
         self.assertNotIn("HellaSwag", render_markdown(make_run(), HARDWARE))
+
+    def test_paired_interval_shown_and_serialized(self):
+        run = make_run()
+        base = [math.log(10.0) + w for w in (0.05, -0.05, 0.02, -0.02)]
+        run.baseline.chunk_nll = base
+        run.variants[0].chunk_nll = [b + math.log(1.005) for b in base]  # a steady +0.5%
+        md = render_markdown(run, HARDWARE)
+        self.assertIn("+0.50% [+0.50, +0.50]", md)
+        self.assertIn("paired chunk by chunk", md)
+        self.assertNotIn("Borderline", md)
+        payload = json.loads(to_json(run, HARDWARE))
+        lo, hi = payload["variants"][1]["ppl_increase_ci_pct"]
+        self.assertAlmostEqual(lo, 0.5, places=6)
+        self.assertIsNone(payload["variants"][0]["ppl_increase_ci_pct"])
+
+    def test_flags_a_pick_whose_interval_crosses_the_budget(self):
+        run = make_run()
+        base = [math.log(10.0)] * 4
+        run.baseline.chunk_nll = base
+        # +0.5% on average, but the chunks disagree a lot
+        run.variants[0].chunk_nll = [
+            b + d for b, d in zip(base, (0.035, -0.025, 0.035, -0.025))
+        ]
+        md = render_markdown(run, HARDWARE)
+        self.assertIn("**Q4_K_M**", md)
+        self.assertIn("Borderline", md)
 
 
 if __name__ == "__main__":

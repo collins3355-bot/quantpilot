@@ -7,6 +7,7 @@ orchestrates the battle-tested llama.cpp binaries and measures the results.
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -98,7 +99,38 @@ def parse_perplexity(output: str) -> tuple[float, float | None]:
     return float(match.group(1)), err
 
 
-def perplexity(model: Path, corpus: Path, chunks: int) -> tuple[float, float | None]:
+_RUNNING_RE = re.compile(r"\[(\d+)\](\d+\.\d+)")
+
+
+def parse_chunk_nll(output: str) -> list[float]:
+    """Per-chunk mean negative log-likelihood, recovered from the running estimates.
+
+    llama-perplexity prints the cumulative PPL after each chunk
+    ([1]6.41,[2]7.15,...). Every chunk scores the same number of tokens, so
+    chunk i's mean NLL is i*ln(P_i) - (i-1)*ln(P_{i-1}). Paired error bars are
+    built from these. Returns [] when the running estimates aren't present.
+    """
+    running = {int(i): float(p) for i, p in _RUNNING_RE.findall(output)}
+    n = len(running)
+    if n == 0 or set(running) != set(range(1, n + 1)) or min(running.values()) <= 0:
+        return []
+    totals = [0.0] + [i * math.log(running[i]) for i in range(1, n + 1)]
+    return [totals[i] - totals[i - 1] for i in range(1, n + 1)]
+
+
+@dataclass
+class Perplexity:
+    ppl: float
+    err: float | None  # llama-perplexity's ± on the absolute PPL (mostly text-to-text noise)
+    chunk_nll: list[float]  # per-chunk mean NLL, for paired comparisons on identical text
+
+
+def _perplexity_result(output: str) -> Perplexity:
+    ppl, err = parse_perplexity(output)
+    return Perplexity(ppl=ppl, err=err, chunk_nll=parse_chunk_nll(output))
+
+
+def perplexity(model: Path, corpus: Path, chunks: int) -> Perplexity:
     """Perplexity (lower = better) over the first `chunks` 512-token chunks of `corpus`.
 
     -ngl 99 offloads every layer to the GPU (Metal on Apple silicon).
@@ -112,7 +144,7 @@ def perplexity(model: Path, corpus: Path, chunks: int) -> tuple[float, float | N
             "-ngl", "99",
         ]
     )
-    return parse_perplexity(output)
+    return _perplexity_result(output)
 
 
 _HS_RE = re.compile(r"^\s*(\d+)\t([0-9.]+)%", re.MULTILINE)
@@ -146,7 +178,7 @@ def hellaswag(model: Path, data: Path, tasks: int) -> tuple[float, int]:
     return parse_hellaswag(output)
 
 
-def save_base_logits(model: Path, corpus: Path, chunks: int, dest: Path) -> tuple[float, float | None]:
+def save_base_logits(model: Path, corpus: Path, chunks: int, dest: Path) -> Perplexity:
     """Run the baseline over the corpus, saving its full logits to `dest`.
 
     Returns the baseline perplexity (the run reports it in the same pass).
@@ -163,7 +195,7 @@ def save_base_logits(model: Path, corpus: Path, chunks: int, dest: Path) -> tupl
             "--kl-divergence-base", dest,
         ]
     )
-    return parse_perplexity(output)
+    return _perplexity_result(output)
 
 
 @dataclass

@@ -24,9 +24,12 @@ them.
   footprint (weights + KV cache at your target context, from a native
   pure-Python GGUF metadata reader) against a memory budget. Validated to
   the MiB against llama.cpp's own KV allocations.
+- **Shipped:** paired error bars on every GGUF Δ PPL (per-chunk differences
+  against the baseline on identical text), and a held-out check for `search`:
+  it tunes on one half of the corpus and judges the recipe on the other.
 - Still to come in 0.5.x: speed-weighted recommendations (quality budget +
   latency floor), machine profiles, multiple corpora with per-corpus deltas,
-  error bars everywhere, fit for MLX reports, and KV math for
+  error bars for MLX reports, fit for MLX reports, and KV math for
   sliding-window/MLA architectures.
 
 ## v0.6 — calibration-aware compilation

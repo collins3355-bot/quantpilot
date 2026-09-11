@@ -11,7 +11,7 @@ quantpilot replaces the folklore with a measurement.
 Real output from an M1 Max, Qwen3-8B: [GGUF sweep](examples/qwen3-8b-gguf.md) ·
 [MLX sweep](examples/qwen3-8b-mlx.md) ·
 [GGUF vs. MLX head-to-head](examples/qwen3-8b-gguf-vs-mlx.md) · [per-layer search](examples/qwen3-8b-search.md) — the two
-engines' full-precision baselines agree to 0.04%, and the quality frontier is
+engines' full-precision baselines agree to within 0.07%, and the quality frontier is
 genuinely mixed (MLX wins at 6-bit, GGUF's K-quants win at 4-bit).
 
 ```
@@ -72,7 +72,11 @@ double the per-variant eval time). Skip it with `--no-kld`.
 Compose a per-layer mixed-precision recipe instead of picking a preset — it
 probes each tensor class's sensitivity on your model, then bumps the most
 valuable classes until the composed model meets your quality budget, and
-prints the exact `llama-quantize` command to reproduce the recipe:
+prints the exact `llama-quantize` command to reproduce the recipe. A recipe
+tuned on one sample of text partly fits that sample's noise, so `search` tunes
+on the first half of your corpus and then judges the recipe, against the
+original and against uniform `--bump`, on the held-out second half (or on
+`--holdout FILE`):
 
 ```
 quantpilot search \
@@ -107,6 +111,11 @@ Or run without installing: `PYTHONPATH=src python3 -m quantpilot bench ...`
 - **Perplexity** over a held-out text corpus (wikitext-2 by convention), computed
   by `llama-perplexity` with full GPU offload. Lower is better; what matters is
   the *increase* relative to the unquantized baseline.
+- **Paired error bars** on every Δ PPL. llama-perplexity's own ± (about 3% on
+  wikitext) is mostly text-to-text variation, which cancels when two models
+  read the same text. quantpilot recovers each chunk's score from the running
+  estimates and reports a ~95% interval on the *difference*; a recommendation
+  whose interval crosses the budget is flagged as borderline.
 - **KL divergence** of each quant's token distributions against the baseline's
   saved logits — a stricter signal than perplexity, since a quant can luck into
   a good perplexity while disagreeing with the baseline token-by-token. Also

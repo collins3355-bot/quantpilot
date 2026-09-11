@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from . import stats
 from .engines import llamacpp
 
 Progress = Callable[[str], None]
@@ -23,9 +24,15 @@ class Variant:
     mean_kld: float | None = None  # mean KL divergence vs. baseline (0 = identical)
     same_top_pct: float | None = None  # % of tokens with the same top-1 prediction
     hellaswag_acc: float | None = None  # HellaSwag accuracy % (task eval)
+    chunk_nll: list[float] | None = None  # per-chunk mean NLL, for paired error bars
 
     def ppl_increase_pct(self, baseline_ppl: float) -> float:
         return (self.ppl - baseline_ppl) / baseline_ppl * 100.0
+
+    def ppl_increase_ci(self, baseline: Variant) -> tuple[float, float] | None:
+        """~95% interval on the Δ PPL %, paired chunk by chunk against the baseline."""
+        paired = stats.paired_delta_pct(self.chunk_nll, baseline.chunk_nll)
+        return (paired[1], paired[2]) if paired else None
 
 
 @dataclass
@@ -68,10 +75,10 @@ def _measure(
 ) -> Variant:
     if save_logits_to is not None:
         progress(f"  measuring perplexity of {name} and saving baseline logits...")
-        ppl, ppl_err = llamacpp.save_base_logits(path, corpus, chunks, save_logits_to)
+        measured = llamacpp.save_base_logits(path, corpus, chunks, save_logits_to)
     else:
         progress(f"  measuring perplexity of {name} ({chunks} chunks)...")
-        ppl, ppl_err = llamacpp.perplexity(path, corpus, chunks)
+        measured = llamacpp.perplexity(path, corpus, chunks)
     mean_kld = same_top_pct = None
     if base_logits is not None:
         progress(f"  measuring KL divergence of {name} vs. baseline...")
@@ -87,13 +94,14 @@ def _measure(
         name=name,
         path=path,
         size_bytes=path.stat().st_size,
-        ppl=ppl,
-        ppl_err=ppl_err,
+        ppl=measured.ppl,
+        ppl_err=measured.err,
         prompt_tps=speed.prompt_tps,
         generate_tps=speed.generate_tps,
         mean_kld=mean_kld,
         same_top_pct=same_top_pct,
         hellaswag_acc=hellaswag_acc,
+        chunk_nll=measured.chunk_nll or None,
     )
 
 

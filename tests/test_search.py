@@ -1,12 +1,17 @@
+import math
 import tempfile
 import unittest
 from pathlib import Path
 
-from quantpilot.engines.llamacpp import override_args
+from quantpilot.engines.llamacpp import EngineError, Perplexity, override_args
 from quantpilot.report import render_search
-from quantpilot.search import Probe, rank_probes, run_search
+from quantpilot.search import Probe, rank_probes, run_search, split_corpus
 
 GB = 1024**3
+HARDWARE = {"chip": "Apple M1 Max", "memory_gb": 64, "os": "Darwin"}
+# Per-chunk difficulty shared by every model on the same text (sums to zero,
+# so the chunk NLLs average back to ln(ppl)).
+WOBBLE = [0.05, -0.05, 0.02, -0.02]
 
 
 class TestOverrideArgs(unittest.TestCase):
@@ -42,37 +47,79 @@ class TestRanking(unittest.TestCase):
         self.assertEqual([p.cls for p in ranked], ["attn_v", "ffn_down"])
 
 
+class TestSplitCorpus(unittest.TestCase):
+    def test_halves_are_complete_and_cut_on_a_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            corpus = tmp / "wiki.test.raw"
+            text = "".join(f"line {i}\n" for i in range(100))
+            corpus.write_text(text)
+            tune, held = split_corpus(corpus, tmp)
+            self.assertEqual(tune.read_text() + held.read_text(), text)
+            self.assertTrue(held.read_text().startswith("line "))
+            self.assertGreater(len(tune.read_text()), len(text) // 3)
+            self.assertGreater(len(held.read_text()), len(text) // 3)
+
+
 class FakeEngine:
     """Deterministic quantize/perplexity standing in for llama.cpp."""
 
     def __init__(self):
-        # sizes in GB and ppls keyed by frozenset of bumped classes
-        self.sizes = {frozenset(): 4.7}
-        self.ppls = {frozenset(): 9.0}
+        # sizes in GB and ppls keyed by frozenset of bumped classes (Q4_K_M base)
+        # or by a uniform type name
+        self.sizes = {frozenset(): 4.7, "Q6_K": 6.2}
+        self.ppls = {frozenset(): 9.0, "Q6_K": 8.84}
+        self.holdout_ppls = {}  # overrides on the held-out text, same keys
         self.baseline_ppl = 8.77
         self.crash_on = set()  # classes whose quantize aborts
 
     def quantize(self, source, dest, qtype, tensor_overrides=None):
         overrides = frozenset((tensor_overrides or {}).keys())
         if overrides & self.crash_on:
-            from quantpilot.engines.llamacpp import EngineError
-
             raise EngineError("simulated abort: incompatible tensor shape")
-        dest.write_bytes(b"g" * int(self.sizes[overrides] * 1024))  # KB stand in for GB
+        key = overrides if qtype == "Q4_K_M" else qtype
+        dest.write_bytes(b"g" * int(self.sizes[key] * 1024))  # KB stand in for GB
         return dest
 
-    def perplexity(self, path, corpus, chunks):
+    def _key(self, path):
         if "mix" in path.name:
             n = int(path.name.split("mix")[1].split(".")[0])
-            key = frozenset(self.order[:n])
-        elif "+" in path.name:
-            cls = path.name.split("+")[1].rsplit("-", 1)[0]
-            key = frozenset([cls])
-        elif path.name.endswith("-Q4_K_M.gguf"):
-            key = frozenset()
+            return frozenset(self.order[:n])
+        if "+" in path.name:  # probe files also end in -Q6_K.gguf, so check first
+            return frozenset([path.name.split("+")[1].rsplit("-", 1)[0]])
+        if path.name.endswith("-Q4_K_M.gguf"):
+            return frozenset()
+        if path.name.endswith("-Q6_K.gguf"):
+            return "Q6_K"
+        return None  # the full-precision source
+
+    def perplexity(self, path, corpus, chunks):
+        key = self._key(path)
+        if key is None:
+            ppl = self.baseline_ppl
+        elif corpus.name.endswith(".holdout.txt") and key in self.holdout_ppls:
+            ppl = self.holdout_ppls[key]
         else:
-            return (self.baseline_ppl, 0.1)
-        return (self.ppls[key], 0.1)
+            ppl = self.ppls[key]
+        return Perplexity(ppl, 0.1, [math.log(ppl) + w for w in WOBBLE[:chunks]])
+
+
+def _search(engine, tmp, classes):
+    source = tmp / "model-bf16.gguf"
+    source.write_bytes(b"g" * 16000)
+    corpus = tmp / "wiki.test.raw"
+    corpus.write_text("".join(f"line {i}\n" for i in range(40)))
+    return run_search(
+        source=source,
+        corpus=corpus,
+        chunks=4,
+        workdir=tmp / "work",
+        classes=classes,
+        budget_pct=1.0,
+        progress=lambda _msg: None,
+        quantize_fn=engine.quantize,
+        ppl_fn=engine.perplexity,
+    )
 
 
 class TestGreedySearch(unittest.TestCase):
@@ -92,30 +139,23 @@ class TestGreedySearch(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            source = tmp / "model-bf16.gguf"
-            source.write_bytes(b"g" * 16000)
-            corpus = tmp / "wiki.test.raw"
-            corpus.write_text("hello")
-            result = run_search(
-                source=source,
-                corpus=corpus,
-                chunks=4,
-                workdir=tmp / "work",
-                classes=["attn_q", "attn_v", "ffn_down"],
-                budget_pct=1.0,
-                progress=lambda _msg: None,
-                quantize_fn=engine.quantize,
-                ppl_fn=engine.perplexity,
-            )
+            result = _search(engine, tmp, ["attn_q", "attn_v", "ffn_down"])
 
             self.assertTrue(result.met_budget)
             self.assertEqual([p.cls for p in result.probes], ["attn_v", "ffn_down"])
             self.assertEqual(result.steps[-1].classes, ["attn_v", "ffn_down"])
             self.assertAlmostEqual(result.steps[-1].dppl_pct, 0.912, places=2)
-            # probe artifacts cleaned up; only the final composed file remains
+            self.assertEqual(result.tune_corpus.name, "wiki.test.tune.txt")
+            # probes cleaned up; the base, the final recipe and the uniform bump remain
             remaining = sorted(f.name for f in (tmp / "work").glob("*.gguf"))
-            self.assertEqual(remaining, ["model-bf16-Q4_K_M-mix2.gguf", "model-bf16-Q4_K_M.gguf"])
+            self.assertEqual(
+                remaining,
+                ["model-bf16-Q4_K_M-mix2.gguf", "model-bf16-Q4_K_M.gguf", "model-bf16-Q6_K.gguf"],
+            )
             self.assertIn("--tensor-type ffn_down=q6_k", result.recipe_command())
+            # same behaviour on held-out text, so the recipe holds
+            self.assertAlmostEqual(result.holdout.recipe.dppl_pct, 0.912, places=2)
+            self.assertIn("Holds on held-out text", render_search(result, HARDWARE))
 
     def test_crashing_probe_is_skipped_and_reported(self):
         engine = FakeEngine()
@@ -123,33 +163,30 @@ class TestGreedySearch(unittest.TestCase):
         engine.sizes[frozenset(["ffn_down"])] = 5.0
         engine.ppls[frozenset(["ffn_down"])] = 8.80  # meets 1% budget alone
         engine.order = ["ffn_down"]
-        engine.sizes[frozenset(["ffn_down"])] = 5.0
 
         with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            source = tmp / "model-bf16.gguf"
-            source.write_bytes(b"g" * 16000)
-            corpus = tmp / "wiki.test.raw"
-            corpus.write_text("hello")
-            result = run_search(
-                source=source,
-                corpus=corpus,
-                chunks=4,
-                workdir=tmp / "work",
-                classes=["token_embd", "ffn_down"],
-                budget_pct=1.0,
-                progress=lambda _msg: None,
-                quantize_fn=engine.quantize,
-                ppl_fn=engine.perplexity,
-            )
+            result = _search(engine, Path(tmp), ["token_embd", "ffn_down"])
             self.assertEqual(result.failed, ["token_embd"])
             self.assertEqual([p.cls for p in result.probes], ["ffn_down"])
             self.assertTrue(result.met_budget)
 
+    def test_holdout_catches_a_recipe_that_only_fits_the_tuning_text(self):
+        engine = FakeEngine()
+        engine.sizes[frozenset(["ffn_down"])] = 5.0
+        engine.ppls[frozenset(["ffn_down"])] = 8.80  # +0.34% on the tuning text
+        engine.holdout_ppls[frozenset(["ffn_down"])] = 8.95  # +2.05% on held-out text
+        engine.order = ["ffn_down"]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = _search(engine, Path(tmp), ["ffn_down"])
+            self.assertTrue(result.met_budget)  # judged on the tuning text
+            self.assertAlmostEqual(result.holdout.recipe.dppl_pct, 2.05, places=1)
+            md = render_search(result, HARDWARE)
+            self.assertIn("Does not hold on held-out text", md)
+            self.assertIn("worse quality", md)  # 8.95 vs. uniform Q6_K at 8.84
+
     def test_renders_report(self):
-        md = render_search(
-            _quick_result(), {"chip": "Apple M1 Max", "memory_gb": 64, "os": "Darwin"}
-        )
+        md = render_search(_quick_result(), HARDWARE)
         self.assertIn("Sensitivity probes", md)
         self.assertIn("| ffn_down | +307 MB", md)
         self.assertIn("Met the 1% budget", md)

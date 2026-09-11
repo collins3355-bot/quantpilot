@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from quantpilot.engines import llamacpp
@@ -22,6 +23,23 @@ class TestPerplexityParsing(unittest.TestCase):
     def test_raises_when_missing(self):
         with self.assertRaises(llamacpp.EngineError):
             llamacpp.parse_perplexity("model failed to load")
+
+
+class TestChunkNLL(unittest.TestCase):
+    def test_recovers_per_chunk_nll_from_running_estimates(self):
+        nll = llamacpp.parse_chunk_nll(
+            "[1]6.4133,[2]7.1522,[3]7.0629\nFinal estimate: PPL = 7.0629 +/- 0.2\n"
+        )
+        self.assertEqual(len(nll), 3)
+        self.assertAlmostEqual(nll[0], math.log(6.4133))
+        # the per-chunk values average back to the final estimate
+        self.assertAlmostEqual(sum(nll) / 3, math.log(7.0629))
+
+    def test_empty_without_running_estimates(self):
+        self.assertEqual(llamacpp.parse_chunk_nll("Final estimate: PPL = 9.5\n"), [])
+
+    def test_ignores_hellaswag_style_brackets(self):
+        self.assertEqual(llamacpp.parse_chunk_nll("16\t50.0%\t[27.9996%, 72.0004%]\n"), [])
 
 
 class TestHellaSwagParsing(unittest.TestCase):

@@ -161,7 +161,11 @@ def cmd_search(args: argparse.Namespace) -> int:
 
     source = Path(args.source)
     corpus = Path(args.corpus)
-    for path, flag in ((source, "--source"), (corpus, "--corpus")):
+    holdout = Path(args.holdout) if args.holdout else None
+    checks = [(source, "--source"), (corpus, "--corpus")]
+    if holdout is not None:
+        checks.append((holdout, "--holdout"))
+    for path, flag in checks:
         if not path.exists():
             print(f"error: {flag} {path} does not exist", file=sys.stderr)
             return 1
@@ -176,6 +180,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         budget_pct=args.budget,
         classes=args.classes,
         keep_artifacts=args.keep_artifacts,
+        holdout=holdout,
     )
 
     ladder = None
@@ -338,6 +343,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="512-token chunks of the corpus to evaluate (default: 32)")
     search.add_argument("--classes", nargs="+", default=None,
                         help="tensor classes to probe (default: all)")
+    search.add_argument("--holdout", default=None, metavar="TEXT",
+                        help="plain-text file for the held-out check (default: tune on "
+                        "the first half of --corpus, check on the second half)")
     search.add_argument("--keep-artifacts", action="store_true",
                         help="keep probe/intermediate .gguf files instead of deleting them")
     search.add_argument("--ladder", default=None,
