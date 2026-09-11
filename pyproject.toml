@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantpilot"
-version = "0.5.0"
+version = "0.5.1"
 description = "Quantization autotuner: find the best quant for your model, your hardware, and your quality budget"
 readme = "README.md"
 requires-python = ">=3.10"

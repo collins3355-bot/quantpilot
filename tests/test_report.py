@@ -89,6 +89,14 @@ class TestReport(unittest.TestCase):
         self.assertIn("**Q4_K_M**", md)
         self.assertIn("Borderline", md)
 
+    def test_speed_spread_rendered_when_measured(self):
+        run = make_run()
+        run.variants[0].generate_tps_sd = 12.0
+        md = render_markdown(run, HARDWARE)
+        self.assertIn("| 300 ± 12 |", md)
+        self.assertIn("standard deviation", md)
+        self.assertEqual(json.loads(to_json(run, HARDWARE))["variants"][1]["generate_tps_sd"], 12.0)
+
 
 if __name__ == "__main__":
     unittest.main()

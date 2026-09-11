@@ -5,15 +5,16 @@ Engine: llama.cpp
 Quality metric: perplexity over 32 × 512-token chunks of `wiki.test.raw`, plus KL divergence of each quant's token distributions vs. baseline, plus HellaSwag accuracy (task eval)
 Quality budget: ≤ 1% perplexity increase vs. baseline
 Δ PPL brackets: ~95% interval, paired chunk by chunk against the baseline on the same text
+Speed: mean ± standard deviation across llama-bench repetitions; between sessions, thermals and background load can shift it further
 
 | Variant | Size | Δ size | Perplexity | Δ PPL | Mean KLD | Top-1 agree | HellaSwag | Prompt t/s | Gen t/s |
 |---|---|---|---|---|---|---|---|---|---|
-| baseline | 15.26 GB | +0% | 8.7725 | +0.00% | 0.0000 | 100.0% | 73.2% | 498 | 22 |
-| Q3_K_M | 3.84 GB | -75% | 9.5153 | +8.47% [+6.29, +10.69] | 0.1600 | 84.4% | 69.5% | 425 | 37 |
-| Q4_K_M | 4.68 GB | -69% | 8.9857 | +2.43% [+1.20, +3.68] | 0.0465 | 91.5% | 73.0% | 441 | 40 |
-| Q5_K_M | 5.45 GB | -64% | 8.8792 | +1.22% [+0.54, +1.89] | 0.0150 | 95.2% | 73.8% | 393 | 30 |
-| Q6_K | 6.26 GB | -59% | 8.8453 | +0.83% [+0.49, +1.17] | 0.0054 | 96.9% | 73.8% | 430 | 35 |
-| Q8_0 | 8.11 GB | -47% | 8.7991 | +0.30% [+0.19, +0.42] | 0.0006 | 99.0% | 73.0% | 581 | 38 |
+| baseline | 15.26 GB | +0% | 8.7725 | +0.00% | 0.0000 | 100.0% | 73.2% | 499 ± 1 | 22 ± 0 |
+| Q3_K_M | 3.84 GB | -75% | 9.5153 | +8.47% [+6.29, +10.69] | 0.1600 | 84.4% | 69.5% | 487 ± 2 | 44 ± 0 |
+| Q4_K_M | 4.68 GB | -69% | 8.9857 | +2.43% [+1.20, +3.68] | 0.0465 | 91.5% | 73.0% | 504 ± 2 | 47 ± 0 |
+| Q5_K_M | 5.45 GB | -64% | 8.8792 | +1.22% [+0.54, +1.89] | 0.0150 | 95.2% | 73.8% | 452 ± 1 | 36 ± 2 |
+| Q6_K | 6.26 GB | -59% | 8.8453 | +0.83% [+0.49, +1.17] | 0.0054 | 96.9% | 73.8% | 427 ± 48 | 36 ± 2 |
+| Q8_0 | 8.11 GB | -47% | 8.7991 | +0.30% [+0.19, +0.42] | 0.0006 | 99.0% | 73.0% | 544 ± 53 | 35 ± 1 |
 
 ## Recommendation
 

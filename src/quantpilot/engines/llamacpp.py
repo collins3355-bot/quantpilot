@@ -237,6 +237,8 @@ def kl_divergence(model: Path, base_logits: Path) -> KLDStats:
 class Speed:
     prompt_tps: float | None  # prompt processing, tokens/second
     generate_tps: float | None  # text generation, tokens/second
+    prompt_sd: float | None = None  # standard deviation across llama-bench repetitions
+    generate_sd: float | None = None
 
 
 def parse_bench_json(output: str) -> Speed:
@@ -245,17 +247,22 @@ def parse_bench_json(output: str) -> Speed:
     if start == -1 or end == -1:
         raise EngineError("could not find a JSON array in llama-bench output")
     entries = json.loads(output[start : end + 1])
-    prompt_tps = generate_tps = None
+    speed = Speed(prompt_tps=None, generate_tps=None)
     for entry in entries:
         if entry.get("n_gen", 0) == 0 and entry.get("n_prompt", 0) > 0:
-            prompt_tps = entry.get("avg_ts")
+            speed.prompt_tps, speed.prompt_sd = entry.get("avg_ts"), entry.get("stddev_ts")
         elif entry.get("n_gen", 0) > 0 and entry.get("n_prompt", 0) == 0:
-            generate_tps = entry.get("avg_ts")
-    return Speed(prompt_tps=prompt_tps, generate_tps=generate_tps)
+            speed.generate_tps, speed.generate_sd = entry.get("avg_ts"), entry.get("stddev_ts")
+    return speed
 
 
-def bench(model: Path, repetitions: int = 3) -> Speed:
-    """Prompt-processing and generation throughput via llama-bench."""
+def bench(model: Path, repetitions: int = 5) -> Speed:
+    """Prompt-processing and generation throughput via llama-bench.
+
+    Five repetitions (llama-bench's own default) give a usable spread. The
+    spread only covers noise within one session: between sessions, thermals
+    and background load moved Qwen3-8B generation speed by 20%+ on an M1 Max.
+    """
     output = _run(
         [find_binary("llama-bench"), "-m", model, "-r", str(repetitions), "-o", "json"]
     )

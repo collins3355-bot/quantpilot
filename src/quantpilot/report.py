@@ -26,8 +26,10 @@ def human_size(size_bytes: int) -> str:
     return f"{size_bytes / 1024**2:.0f} MB"
 
 
-def _tps(value: float | None) -> str:
-    return f"{value:,.0f}" if value is not None else "—"
+def _tps(value: float | None, sd: float | None = None) -> str:
+    if value is None:
+        return "—"
+    return f"{value:,.0f} ± {sd:,.0f}" if sd is not None else f"{value:,.0f}"
 
 
 def _row(v: Variant, baseline: Variant, kld: bool, hs: bool) -> str:
@@ -47,7 +49,7 @@ def _row(v: Variant, baseline: Variant, kld: bool, hs: bool) -> str:
         cells.append(f"{v.same_top_pct:.1f}%" if v.same_top_pct is not None else "—")
     if hs:
         cells.append(f"{v.hellaswag_acc:.1f}%" if v.hellaswag_acc is not None else "—")
-    cells += [_tps(v.prompt_tps), _tps(v.generate_tps)]
+    cells += [_tps(v.prompt_tps, v.prompt_tps_sd), _tps(v.generate_tps, v.generate_tps_sd)]
     return "| " + " | ".join(cells) + " |"
 
 
@@ -56,6 +58,7 @@ def render_markdown(run: BenchRun, hardware: dict) -> str:
     kld = run.baseline.mean_kld is not None
     hs = any(v.hellaswag_acc is not None for v in run.all_variants())
     has_ci = any(v.ppl_increase_ci(run.baseline) for v in run.variants)
+    has_sd = any(v.generate_tps_sd is not None for v in run.all_variants())
     metric = f"perplexity over {run.chunks} × 512-token chunks of `{run.corpus.name}`"
     if kld:
         metric += ", plus KL divergence of each quant's token distributions vs. baseline"
@@ -79,6 +82,11 @@ def render_markdown(run: BenchRun, hardware: dict) -> str:
         lines.append(
             "Δ PPL brackets: ~95% interval, paired chunk by chunk against the baseline "
             "on the same text"
+        )
+    if has_sd:
+        lines.append(
+            "Speed: mean ± standard deviation across llama-bench repetitions; between "
+            "sessions, thermals and background load can shift it further"
         )
     lines += [
         "",
@@ -346,6 +354,8 @@ def to_json(run: BenchRun, hardware: dict) -> str:
                 "hellaswag_acc": v.hellaswag_acc,
                 "prompt_tps": v.prompt_tps,
                 "generate_tps": v.generate_tps,
+                "prompt_tps_sd": v.prompt_tps_sd,
+                "generate_tps_sd": v.generate_tps_sd,
                 "chunk_nll": v.chunk_nll,
             }
         )

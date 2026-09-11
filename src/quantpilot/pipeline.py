@@ -25,6 +25,8 @@ class Variant:
     same_top_pct: float | None = None  # % of tokens with the same top-1 prediction
     hellaswag_acc: float | None = None  # HellaSwag accuracy % (task eval)
     chunk_nll: list[float] | None = None  # per-chunk mean NLL, for paired error bars
+    prompt_tps_sd: float | None = None  # spread across llama-bench repetitions
+    generate_tps_sd: float | None = None
 
     def ppl_increase_pct(self, baseline_ppl: float) -> float:
         return (self.ppl - baseline_ppl) / baseline_ppl * 100.0
@@ -102,6 +104,8 @@ def _measure(
         same_top_pct=same_top_pct,
         hellaswag_acc=hellaswag_acc,
         chunk_nll=measured.chunk_nll or None,
+        prompt_tps_sd=speed.prompt_sd,
+        generate_tps_sd=speed.generate_sd,
     )
 
 

@@ -12,7 +12,8 @@ Real output from an M1 Max, Qwen3-8B: [GGUF sweep](examples/qwen3-8b-gguf.md) ·
 [MLX sweep](examples/qwen3-8b-mlx.md) ·
 [GGUF vs. MLX head-to-head](examples/qwen3-8b-gguf-vs-mlx.md) · [per-layer search](examples/qwen3-8b-search.md) — the two
 engines' full-precision baselines agree to within 0.07%, and the quality frontier is
-genuinely mixed (MLX wins at 6-bit, GGUF's K-quants win at 4-bit).
+genuinely mixed: GGUF's K-quants win clearly at 4-bit, while 6- and 8-bit are a
+split decision (MLX measures closer on perplexity, GGUF closer on KL divergence).
 
 ```
 $ quantpilot bench --source qwen2.5-0.5b-instruct-f16.gguf --corpus wiki.test.raw
@@ -124,7 +125,9 @@ Or run without installing: `PYTHONPATH=src python3 -m quantpilot bench ...`
 - **HellaSwag accuracy** (optional, `--hellaswag`): a real task eval, because
   wikitext perplexity is a narrow lens. Uses llama.cpp's native scorer with
   the community-standard `hellaswag_val_full.txt` data file.
-- **Speed** from `llama-bench`: prompt processing and generation tokens/second.
+- **Speed** from `llama-bench`: prompt processing and generation tokens/second,
+  as mean ± standard deviation over 5 runs. Speed also drifts between
+  sessions (thermals, background load), so compare runs made back to back.
 
 Both engines report KL divergence — the MLX side computes it in-process
 against the 16-bit baseline in a separate pass (no multi-GB logits file, but

@@ -90,12 +90,19 @@ class TestBenchParsing(unittest.TestCase):
     def test_extracts_prompt_and_generate_speeds(self):
         output = (
             "ggml_metal_init: found device\n"
-            '[{"n_prompt": 512, "n_gen": 0, "avg_ts": 4131.7},'
-            ' {"n_prompt": 0, "n_gen": 128, "avg_ts": 231.2}]\n'
+            '[{"n_prompt": 512, "n_gen": 0, "avg_ts": 4131.7, "stddev_ts": 22.1},'
+            ' {"n_prompt": 0, "n_gen": 128, "avg_ts": 231.2, "stddev_ts": 11.7}]\n'
         )
         speed = llamacpp.parse_bench_json(output)
         self.assertAlmostEqual(speed.prompt_tps, 4131.7)
         self.assertAlmostEqual(speed.generate_tps, 231.2)
+        self.assertAlmostEqual(speed.prompt_sd, 22.1)
+        self.assertAlmostEqual(speed.generate_sd, 11.7)
+
+    def test_spread_is_optional(self):
+        speed = llamacpp.parse_bench_json('[{"n_prompt": 0, "n_gen": 128, "avg_ts": 50.0}]')
+        self.assertAlmostEqual(speed.generate_tps, 50.0)
+        self.assertIsNone(speed.generate_sd)
 
     def test_raises_without_json(self):
         with self.assertRaises(llamacpp.EngineError):
